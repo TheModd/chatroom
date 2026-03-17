@@ -3,7 +3,61 @@
    Handles Create / Join party flows via Socket.IO
 ────────────────────────────────────────────── */
 
-const socket = io();
+// ── Lazy socket — only connect when user acts ─
+let socket = null;
+let socketReady = false;
+
+function getSocket() {
+  if (socket) return socket;
+
+  if (typeof io === 'undefined') {
+    showError('create-error', '⚠️ Could not connect to server. Please refresh the page.');
+    showError('join-error',   '⚠️ Could not connect to server. Please refresh the page.');
+    return null;
+  }
+
+  try {
+    socket = io();
+  } catch (e) {
+    showError('create-error', '⚠️ Connection failed. Please refresh.');
+    showError('join-error',   '⚠️ Connection failed. Please refresh.');
+    return null;
+  }
+
+  // ── Socket listeners (registered once) ───────
+
+  socket.on('lobby_created', ({ code }) => {
+    setLoading('create', false);
+    const name = document.getElementById('create-name').value.trim();
+    const params = new URLSearchParams({ code, name, host: 'true' });
+    window.location.href = `lobby.html?${params.toString()}`;
+  });
+
+  socket.on('create_error', ({ message }) => {
+    setLoading('create', false);
+    showError('create-error', message);
+  });
+
+  socket.on('lobby_joined', ({ code }) => {
+    setLoading('join', false);
+    const name = document.getElementById('join-name').value.trim();
+    const params = new URLSearchParams({ code, name, host: 'false' });
+    window.location.href = `lobby.html?${params.toString()}`;
+  });
+
+  socket.on('join_error', ({ message }) => {
+    setLoading('join', false);
+    showError('join-error', message);
+  });
+
+  socket.on('connect_error', () => {
+    setLoading('create', false);
+    setLoading('join', false);
+    showToast('⚠️ Cannot reach server — please refresh.');
+  });
+
+  return socket;
+}
 
 // ── Helpers ───────────────────────────────────
 function showError(id, msg) {
@@ -56,21 +110,12 @@ function handleCreate() {
     return;
   }
 
+  const s = getSocket();
+  if (!s) return;
+
   setLoading('create', true);
-  socket.emit('create_lobby', { name });
+  s.emit('create_lobby', { name });
 }
-
-socket.on('lobby_created', ({ code, players, hostId }) => {
-  setLoading('create', false);
-  // Navigate to lobby page
-  const params = new URLSearchParams({ code, name: document.getElementById('create-name').value.trim(), host: 'true' });
-  window.location.href = `lobby.html?${params.toString()}`;
-});
-
-socket.on('create_error', ({ message }) => {
-  setLoading('create', false);
-  showError('create-error', message);
-});
 
 // ── JOIN LOBBY ────────────────────────────────
 function handleJoin() {
@@ -81,23 +126,10 @@ function handleJoin() {
   if (!name) { showError('join-error', 'Please enter your display name.'); return; }
   if (!code || code.length < 4) { showError('join-error', 'Please enter the lobby code.'); return; }
 
+  const s = getSocket();
+  if (!s) return;
+
   setLoading('join', true);
-  socket.emit('join_lobby', { code, name });
+  s.emit('join_lobby', { code, name });
 }
 
-socket.on('lobby_joined', ({ code, players, hostId }) => {
-  setLoading('join', false);
-  const name = document.getElementById('join-name').value.trim();
-  const params = new URLSearchParams({ code, name, host: 'false' });
-  window.location.href = `lobby.html?${params.toString()}`;
-});
-
-socket.on('join_error', ({ message }) => {
-  setLoading('join', false);
-  showError('join-error', message);
-});
-
-// ── Connection feedback ───────────────────────
-socket.on('connect_error', () => {
-  showToast('⚠️ Cannot reach server. Make sure it is running.');
-});
