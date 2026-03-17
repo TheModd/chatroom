@@ -86,11 +86,24 @@ io.on('connection', (socket) => {
 
     const lobby = lobbies.get(trimmedCode);
 
-    // Prevent duplicate names in same room
-    const nameTaken = lobby.players.some(p => p.name.toLowerCase() === trimmedName.toLowerCase());
-    if (nameTaken) {
-      socket.emit('join_error', { message: `The name "${trimmedName}" is already taken in this lobby.` });
-      return;
+    // Check for duplicate names — treat disconnected sockets as ghosts and remove them
+    const existingIdx = lobby.players.findIndex(
+      p => p.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (existingIdx !== -1) {
+      const ghost = lobby.players[existingIdx];
+      const ghostSocket = io.sockets.sockets.get(ghost.id);
+      if (ghostSocket && ghostSocket.connected) {
+        // Genuinely duplicate — a live socket already has this name
+        socket.emit('join_error', { message: `The name "${trimmedName}" is already taken in this lobby.` });
+        return;
+      }
+      // Ghost (disconnected socket) — clean up silently
+      console.log(`[~] Removing ghost player "${ghost.name}" from lobby ${trimmedCode}`);
+      lobby.players.splice(existingIdx, 1);
+      if (lobby.host === ghost.id) {
+        lobby.host = lobby.players.length > 0 ? lobby.players[0].id : socket.id;
+      }
     }
 
     const player = { id: socket.id, name: trimmedName };
@@ -200,5 +213,5 @@ function handleLeave(socket, code) {
 // ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`\n🚀 Shared Lobbies server running at http://localhost:${PORT}\n`);
+  console.log(`\n🚀 Chatroom server running at http://localhost:${PORT}\n`);
 });
