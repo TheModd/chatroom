@@ -9,31 +9,18 @@ const MY_CODE = (params.get('code') || '').toUpperCase();
 const MY_NAME = params.get('name') || 'Anonymous';
 const IS_HOST = params.get('host') === 'true';
 
-// Guards
 if (!MY_CODE || !MY_NAME) {
   window.location.href = 'index.html';
 }
 
-// ── Connect Socket.IO ─────────────────────────
-const socket = io();
-
-// ── DOM refs ──────────────────────────────────
-const codeDisplay  = document.getElementById('lobby-code-display');
-const playersList  = document.getElementById('players-list');
-const playerCount  = document.getElementById('player-count');
-const chatMessages = document.getElementById('chat-messages');
-const chatInput    = document.getElementById('chat-input');
-
-codeDisplay.textContent = MY_CODE;
-document.title = `Lobby ${MY_CODE} – Shared Lobbies`;
-
-// ── State ─────────────────────────────────────
-let currentHostId = null;
-let mySocketId    = null;
+// ── Module-level refs (populated after DOM ready) ──
+let socket        = null;
+let codeDisplay, playersList, playerCount, chatMessages, chatInput;
 
 // ── Toast ─────────────────────────────────────
 function showToast(msg, duration = 2500) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), duration);
@@ -51,15 +38,24 @@ function copyCode() {
 }
 window.copyCode = copyCode;
 
+// ── HTML Escape ───────────────────────────────
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ── Render Players ────────────────────────────
 function renderPlayers(players, hostId) {
-  currentHostId = hostId;
+  if (!playersList) return;
   playersList.innerHTML = '';
-  playerCount.textContent = players.length;
+  if (playerCount) playerCount.textContent = players.length;
 
   players.forEach(({ id, name }) => {
-    const isMe   = (name === MY_NAME);
-    const isHost = (id === hostId);
+    const isMe    = (name === MY_NAME);
+    const isHost  = (id === hostId);
     const initial = name.charAt(0).toUpperCase();
 
     const item = document.createElement('div');
@@ -77,6 +73,7 @@ function renderPlayers(players, hostId) {
 
 // ── Chat ──────────────────────────────────────
 function addMessage({ system, name, text, timestamp }) {
+  if (!chatMessages) return;
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const div  = document.createElement('div');
 
@@ -100,6 +97,7 @@ function addMessage({ system, name, text, timestamp }) {
 }
 
 function sendMessage() {
+  if (!socket || !chatInput) return;
   const text = chatInput.value.trim();
   if (!text) return;
   socket.emit('send_message', { code: MY_CODE, name: MY_NAME, text });
@@ -116,71 +114,80 @@ function handleChatKey(e) {
 }
 window.handleChatKey = handleChatKey;
 
-// ── Leave ─────────────────────────────────────
 function leaveLobby() {
-  socket.emit('leave_lobby', { code: MY_CODE });
+  if (socket) socket.emit('leave_lobby', { code: MY_CODE });
   window.location.href = 'index.html';
 }
 window.leaveLobby = leaveLobby;
 
-// ── HTML Escape ───────────────────────────────
-function escapeHTML(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// ── Socket init — deferred until DOM is ready ─
+document.addEventListener('DOMContentLoaded', () => {
+  // Grab DOM refs
+  codeDisplay  = document.getElementById('lobby-code-display');
+  playersList  = document.getElementById('players-list');
+  playerCount  = document.getElementById('player-count');
+  chatMessages = document.getElementById('chat-messages');
+  chatInput    = document.getElementById('chat-input');
 
-// ── Socket Events ─────────────────────────────
-socket.on('connect', () => {
-  mySocketId = socket.id;
+  if (codeDisplay) codeDisplay.textContent = MY_CODE;
+  document.title = `Lobby ${MY_CODE} – Chatroom`;
 
-  if (IS_HOST) {
-    // Host: re-create lobby (socket re-connected after page navigation)
-    socket.emit('create_lobby', { name: MY_NAME });
-  } else {
-    // Joiner: re-join room
-    socket.emit('join_lobby', { code: MY_CODE, name: MY_NAME });
+  // Guard: socket.io.js must be loaded by now
+  if (typeof io === 'undefined') {
+    showToast('⚠️ Could not connect — please refresh the page.');
+    addMessage({ system: true, text: '⚠️ Connection unavailable. Please refresh.', timestamp: Date.now() });
+    return;
   }
-});
 
-// Host: lobby re-created after navigation
-socket.on('lobby_created', ({ code, players, hostId }) => {
-  mySocketId = socket.id;
-  renderPlayers(players, hostId);
-  addMessage({ system: true, text: `Lobby "${code}" created. Share the code with your friends!`, timestamp: Date.now() });
-});
+  try {
+    socket = io();
+  } catch (e) {
+    showToast('⚠️ Connection failed — please refresh.');
+    return;
+  }
 
-// Joiner: confirmed join
-socket.on('lobby_joined', ({ code, players, hostId }) => {
-  mySocketId = socket.id;
-  renderPlayers(players, hostId);
-  addMessage({ system: true, text: `You joined lobby "${code}".`, timestamp: Date.now() });
-});
+  // ── Socket.IO events ─────────────────────────
 
-// Live player list update
-socket.on('players_updated', ({ players, hostId, joined, left }) => {
-  renderPlayers(players, hostId);
-  // System toast (the system chat message is already sent by server)
-});
+  socket.on('connect', () => {
+    if (IS_HOST) {
+      socket.emit('create_lobby', { name: MY_NAME });
+    } else {
+      socket.emit('join_lobby', { code: MY_CODE, name: MY_NAME });
+    }
+  });
 
-// New chat message
-socket.on('new_message', (payload) => {
-  addMessage(payload);
-});
+  socket.on('lobby_created', ({ code, players, hostId }) => {
+    renderPlayers(players, hostId);
+    addMessage({ system: true, text: `Lobby "${code}" created. Share the code with your friends!`, timestamp: Date.now() });
+  });
 
-// Join error on re-join attempt
-socket.on('join_error', ({ message }) => {
-  showToast(`⚠️ ${message}`);
-  setTimeout(() => window.location.href = 'index.html', 2500);
-});
+  socket.on('lobby_joined', ({ code, players, hostId }) => {
+    renderPlayers(players, hostId);
+    addMessage({ system: true, text: `You joined lobby "${code}".`, timestamp: Date.now() });
+  });
 
-// Connection dropped
-socket.on('disconnect', () => {
-  addMessage({ system: true, text: 'Connection lost. Trying to reconnect…', timestamp: Date.now() });
-});
+  socket.on('players_updated', ({ players, hostId }) => {
+    renderPlayers(players, hostId);
+  });
 
-socket.on('reconnect', () => {
-  addMessage({ system: true, text: 'Reconnected! ✓', timestamp: Date.now() });
+  socket.on('new_message', (payload) => {
+    addMessage(payload);
+  });
+
+  socket.on('join_error', ({ message }) => {
+    showToast(`⚠️ ${message}`);
+    setTimeout(() => window.location.href = 'index.html', 2500);
+  });
+
+  socket.on('disconnect', () => {
+    addMessage({ system: true, text: 'Connection lost. Trying to reconnect…', timestamp: Date.now() });
+  });
+
+  socket.on('reconnect', () => {
+    addMessage({ system: true, text: 'Reconnected! ✓', timestamp: Date.now() });
+  });
+
+  socket.on('connect_error', () => {
+    showToast('⚠️ Cannot reach server — please refresh.');
+  });
 });
