@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lobby – Shared Lobbies</title>
+  <meta name="description" content="Your real-time lobby room." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="lobby-layout">
+
+    <!-- ── Header ── -->
+    <header class="lobby-header">
+      <div class="lobby-header-left">
+        <div class="lobby-logo">Shared<span>Lobbies</span></div>
+        <div class="code-display">
+          <div>
+            <div class="code-label">Lobby Code</div>
+            <div class="code-value" id="lobby-code-display">——</div>
+          </div>
+          <button class="code-copy-btn" id="copy-code-btn" title="Copy code" onclick="copyCode()">📋</button>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-danger btn-icon" onclick="leaveLobby()">🚪 Leave</button>
+      </div>
+    </header>
+
+    <!-- ── Players Sidebar ── -->
+    <aside class="players-panel">
+      <div class="panel-header">
+        <h3>Players</h3>
+        <span class="player-count-badge" id="player-count">0</span>
+      </div>
+      <div class="players-list" id="players-list">
+        <!-- Populated by lobby.js -->
+      </div>
+    </aside>
+
+    <!-- ── Chat Panel ── -->
+    <main class="chat-panel">
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages populated by lobby.js -->
+      </div>
+      <div class="chat-input-row">
+        <input
+          id="chat-input"
+          class="input"
+          type="text"
+          placeholder="Type a message…"
+          maxlength="300"
+          autocomplete="off"
+          onkeydown="handleChatKey(event)"
+        />
+        <button class="send-btn" onclick="sendMessage()" title="Send">➤</button>
+      </div>
+    </main>
+
+  </div><!-- /.lobby-layout -->
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="lobby.js"></script>
+</body>
+</html>
