@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chatroom</title>
-  <meta name="description" content="Create or join a real-time party lobby and chat with friends instantly." />
+  <meta name="description" content="Create or join a real-time chatroom and talk with friends instantly." />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -37,8 +37,7 @@
             autocomplete="off"
           />
           <button id="create-btn" class="btn btn-primary" onclick="handleCreate()">
-            <span id="create-btn-text">🚀 Host a Lobby</span>
-            <span id="create-spinner" class="spinner"></span>
+            🚀 Host a Lobby
           </button>
         </div>
       </div>
@@ -69,8 +68,7 @@
             style="text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700;"
           />
           <button id="join-btn" class="btn btn-primary" onclick="handleJoin()">
-            <span id="join-btn-text">🎯 Join Lobby</span>
-            <span id="join-spinner" class="spinner"></span>
+            🎯 Join Lobby
           </button>
         </div>
       </div>
@@ -81,7 +79,6 @@
   <!-- Toast -->
   <div id="toast"></div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
